@@ -38,6 +38,7 @@ export type IGraphViewProps = {
   nodeSubtypes: any;
   nodeTypes: any;
   readOnly?: boolean;
+  disableMoveNodes?: boolean;
   selected: any;
   showGraphControls?: boolean;
   zoomDelay?: number;
