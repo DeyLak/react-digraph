@@ -22,7 +22,7 @@ import '../styles/main.scss';
 
 import { LayoutEngines } from '../utilities/layout-engine/layout-engine-config';
 import { type LayoutEngineType } from '../utilities/layout-engine/layout-engine-types';
-import { type IGraphViewProps } from './graph-view-props';
+import { type IGraphViewProps, type IViewTransform } from './graph-view-props';
 import Background from './background';
 import Defs from './defs';
 import Edge, { type IEdge, type ITargetPosition } from './edge';
@@ -30,12 +30,6 @@ import GraphControls from './graph-controls';
 import GraphUtils, { type INodeMapNode } from './graph-util';
 import Node, { type INode, type IPoint } from './node';
 import { Transform } from 'stream';
-
-type IViewTransform = {
-  k: number,
-  x: number,
-  y: number
-}
 
 type IGraphViewState = {
   viewTransform?: IViewTransform;
@@ -69,7 +63,9 @@ class GraphView extends React.Component<IGraphViewProps, IGraphViewState> {
     maxZoom: 1.5,
     minZoom: 0.15,
     nodeSize: 154,
+    nodeDragThreshold: 0,
     readOnly: false,
+    disableMoveNodes: false,
     showGraphControls: true,
     zoomDelay: 1000,
     zoomDur: 750
@@ -119,6 +115,7 @@ class GraphView extends React.Component<IGraphViewProps, IGraphViewState> {
   }
 
   nodeTimeouts: any;
+  nodeRemoveTimeouts: any;
   edgeTimeouts: any;
   renderNodesTimeout: any;
   renderEdgesTimeout: any;
@@ -130,11 +127,15 @@ class GraphView extends React.Component<IGraphViewProps, IGraphViewState> {
   view: any;
   graphControls: any;
   layoutEngine: any;
+  zoomTimeout: any;
+  zoomElement: any;
+  isUnmounted: boolean;
 
   constructor(props: IGraphViewProps) {
     super(props);
 
     this.nodeTimeouts = {};
+    this.nodeRemoveTimeouts = {};
     this.edgeTimeouts = {};
     this.renderNodesTimeout = null;
     this.renderEdgesTimeout = null;
@@ -193,7 +194,7 @@ class GraphView extends React.Component<IGraphViewProps, IGraphViewState> {
     // Manually render the first view.
     this.renderView();
 
-    setTimeout(() => {
+    this.zoomTimeout = setTimeout(() => {
       if (this.viewWrapper != null) {
         this.handleZoomToFit();
       }
@@ -201,8 +202,22 @@ class GraphView extends React.Component<IGraphViewProps, IGraphViewState> {
   }
 
   componentWillUnmount() {
+    this.isUnmounted = true
+    if (this.zoomElement) {
+      this.zoomElement
+        .interrupt()
+        .transition();
+    }
     document.removeEventListener('keydown', this.handleWrapperKeydown);
     document.removeEventListener('click', this.handleDocumentClick);
+
+    Object.values(this.edgeTimeouts).forEach(timeout => cancelAnimationFrame(timeout));
+    Object.values(this.nodeTimeouts).forEach(timeout => cancelAnimationFrame(timeout));
+
+    Object.values(this.nodeRemoveTimeouts).forEach(timeout => clearTimeout(timeout));
+
+    clearTimeout(this.zoomTimeout);
+    clearTimeout(this.renderNodesTimeout);
   }
 
   shouldComponentUpdate(nextProps: IGraphViewProps, nextState: IGraphViewState) {
@@ -212,6 +227,7 @@ class GraphView extends React.Component<IGraphViewProps, IGraphViewState> {
       !nextState.componentUpToDate ||
       nextProps.selected !== this.props.selected ||
       nextProps.readOnly !== this.props.readOnly ||
+      nextProps.disableMoveNodes !== this.props.disableMoveNodes ||
       nextProps.layoutEngineType !== this.props.layoutEngineType
     ) {
       return true;
@@ -232,6 +248,11 @@ class GraphView extends React.Component<IGraphViewProps, IGraphViewState> {
     }
 
     const forceReRender = this.props.nodes !== prevProps.nodes || this.props.edges !== prevProps.edges
+    // Stop previous rendering, so we don't have glitched edges and nodes between fast rerenders
+    if (forceReRender) {
+      Object.values(this.edgeTimeouts).forEach(timeout => cancelAnimationFrame(timeout));
+      Object.values(this.nodeTimeouts).forEach(timeout => cancelAnimationFrame(timeout));
+    }
 
     // Note: the order is intentional
     // remove old edges
@@ -275,6 +296,8 @@ class GraphView extends React.Component<IGraphViewProps, IGraphViewState> {
     let prevNode = null;
 
     GraphUtils.yieldingLoop(nodes.length, 50, (i) => {
+      // TODO by @deylak make this propper cancelTimeout, don't use unmount flag
+      if (this.isUnmounted) return;
       node = nodes[i];
       prevNode = this.getNodeById(node[nodeKey], oldNodesMap);
       // if there was a previous node and it changed
@@ -324,7 +347,7 @@ class GraphView extends React.Component<IGraphViewProps, IGraphViewState> {
 
       // remove node
       // The timeout avoids a race condition
-      setTimeout(() => {
+      this.nodeRemoveTimeouts[nodeId] = setTimeout(() => {
         GraphUtils.removeElementFromDom(`node-${nodeId}-container`);
       });
     }
@@ -572,10 +595,10 @@ class GraphView extends React.Component<IGraphViewProps, IGraphViewState> {
     }
     const node = nodeMapNode.node;
 
-    if (readOnly || disableMoveNodes) {
+    if (readOnly) {
       return;
     }
-    if (!shiftKey && !this.state.draggingEdge) {
+    if (!shiftKey && !disableMoveNodes && !this.state.draggingEdge) {
       // node moved
       node.x = position.x;
       node.y = position.y;
@@ -586,7 +609,7 @@ class GraphView extends React.Component<IGraphViewProps, IGraphViewState> {
     } else if ((canCreateEdge && canCreateEdge(nodeId)) || this.state.draggingEdge) {
       // render new edge
       this.syncRenderEdge({ source: nodeId, targetPosition: position });
-      this.setState({ draggingEdge: true });
+      this.setState( { draggingEdge: true });
     }
   }
 
@@ -608,7 +631,7 @@ class GraphView extends React.Component<IGraphViewProps, IGraphViewState> {
         !edgesMap[mapId1] &&
         !edgesMap[mapId2]
       ) {
-        this.setState({
+        this.setState( {
           componentUpToDate: false,
           draggedEdge: null,
           draggingEdge: false,
@@ -618,7 +641,7 @@ class GraphView extends React.Component<IGraphViewProps, IGraphViewState> {
         onCreateEdge(hoveredNodeData, edgeEndNode);
       } else {
         // make the system understand that the edge creation process is done even though it didn't work.
-        this.setState({
+        this.setState( {
           edgeEndNode: null,
           draggingEdge: false,
         });
@@ -635,9 +658,9 @@ class GraphView extends React.Component<IGraphViewProps, IGraphViewState> {
 
     // Detect if edge is being drawn and link to hovered node
     // This will handle a new edge
-    if (shiftKey) {
+    if (shiftKey || disableMoveNodes) {
       this.createNewEdge();
-    } else if (!disableMoveNodes) {
+    } else {
       const nodeMap = this.getNodeById(nodeId);
       if (nodeMap) {
         Object.assign(nodeMap.node, position);
@@ -645,7 +668,7 @@ class GraphView extends React.Component<IGraphViewProps, IGraphViewState> {
       }
     }
     // force a re-render
-    this.setState({
+    this.setState( {
       componentUpToDate: false,
       focused: true,
       // Setting hoveredNode to false here because the layout engine doesn't
@@ -658,16 +681,16 @@ class GraphView extends React.Component<IGraphViewProps, IGraphViewState> {
   handleNodeMouseEnter = (event: any, data: any, hovered: boolean) => {
     // hovered is false when creating edges
     if (hovered && !this.state.hoveredNode) {
-      this.setState({
+      this.setState( {
         hoveredNode: true,
         hoveredNodeData: data
       });
     } else if (!hovered && this.state.hoveredNode && this.state.draggingEdge) {
-      this.setState({
+      this.setState( {
         edgeEndNode: data
       });
     } else {
-      this.setState({
+      this.setState( {
         hoveredNode: true,
         hoveredNodeData: data
       });
@@ -688,7 +711,7 @@ class GraphView extends React.Component<IGraphViewProps, IGraphViewState> {
       if (event.relatedTarget.classList.contains('edge-overlay-path')) {
         return;
       }
-      this.setState({ hoveredNode: false, edgeEndNode: null });
+      this.setState( { hoveredNode: false, edgeEndNode: null });
     }
   }
 
@@ -701,9 +724,10 @@ class GraphView extends React.Component<IGraphViewProps, IGraphViewState> {
       selectedNodeObj: {
         nodeId,
         node
-      }
+      },
+      draggingEdge: false,
     };
-    this.setState(newState);
+    this.setState( newState);
 
     if (!creatingEdge) {
       this.props.onSelectNode(node);
@@ -784,7 +808,7 @@ class GraphView extends React.Component<IGraphViewProps, IGraphViewState> {
       return false;
     }
     this.removeEdgeElement(edge.source, edge.target);
-    this.setState({ draggingEdge: true, draggedEdge: edge });
+    this.setState( { draggingEdge: true, draggedEdge: edge });
     this.dragEdge(edge);
   }
 
@@ -812,7 +836,7 @@ class GraphView extends React.Component<IGraphViewProps, IGraphViewState> {
     targetPosition.x += off.xOff;
     targetPosition.y += off.yOff;
     this.syncRenderEdge({ source: draggedEdge.source, targetPosition });
-    this.setState({
+    this.setState( {
       draggedEdge,
       draggingEdge: true
     });
@@ -820,15 +844,18 @@ class GraphView extends React.Component<IGraphViewProps, IGraphViewState> {
 
   // View 'zoom' handler
   handleZoom = () => {
+    if (this.isUnmounted) return;
     const { draggingEdge, draggedEdge, hoveredNode } = this.state;
     const transform: IViewTransform = d3.event.transform;
-
     if (!draggingEdge) {
       d3.select(this.view).attr('transform', transform);
 
       // prevent re-rendering on zoom
       if (this.state.viewTransform !== transform) {
-        this.setState({
+        if (this.props.onZoom) {
+          this.props.onZoom(transform)
+        }
+        this.setState( {
           viewTransform: transform,
           draggedEdge: null,
           draggingEdge: false
@@ -851,7 +878,7 @@ class GraphView extends React.Component<IGraphViewProps, IGraphViewState> {
       if (draggingEdge && !draggedEdge) {
         // This is a bad case, sometimes when the graph loses focus while an edge
         // is being created it doesn't set draggingEdge to false. This fixes that case.
-        this.setState({
+        this.setState( {
           draggingEdge: false
         });
       }
@@ -905,6 +932,7 @@ class GraphView extends React.Component<IGraphViewProps, IGraphViewState> {
   handleZoomToFit = () => {
     const parent = d3.select(this.viewWrapper.current).node();
     const entities = d3.select(this.entities).node();
+    if (!entities) { return; }
     const viewBBox = entities.getBBox ? entities.getBBox() : null;
     if (!viewBBox) { return; }
 
@@ -982,11 +1010,11 @@ class GraphView extends React.Component<IGraphViewProps, IGraphViewState> {
   // Programmatically resets zoom
   setZoom(k: number = 1, x: number = 0, y: number = 0, dur: number = 0) {
     const t = d3.zoomIdentity.translate(x, y).scale(k);
-
-    d3
+    // We save zoom element, so we can interrupt transition in componentWillUnmount
+    this.zoomElement = d3
       .select(this.viewWrapper.current)
-      .select('svg')
-      .transition()
+      .select('svg');
+    this.zoomElement.transition()
       .duration(dur)
       .call(this.zoom.transform, t);
   }
@@ -1010,7 +1038,16 @@ class GraphView extends React.Component<IGraphViewProps, IGraphViewState> {
   }
 
   getNodeComponent = (id: string, node: INode) => {
-    const { nodeTypes, nodeSubtypes, nodeSize, renderNode, renderNodeText, nodeKey } = this.props;
+    const {
+      nodeTypes,
+      nodeSubtypes,
+      nodeSize,
+      renderNode,
+      renderNodeText,
+      nodeKey,
+      nodeDragThreshold,
+      disableMoveNodes,
+    } = this.props;
     return (
       <Node
         key={id}
@@ -1018,6 +1055,8 @@ class GraphView extends React.Component<IGraphViewProps, IGraphViewState> {
         data={node}
         nodeTypes={nodeTypes}
         nodeSize={nodeSize}
+        nodeDragThreshold={nodeDragThreshold}
+        disableMoveNodes={disableMoveNodes}
         nodeKey={nodeKey}
         nodeSubtypes={nodeSubtypes}
         onNodeMouseEnter={this.handleNodeMouseEnter}
@@ -1185,17 +1224,6 @@ class GraphView extends React.Component<IGraphViewProps, IGraphViewState> {
     const id = `edge-${idVar}`;
     const element = this.getEdgeComponent(edge);
     this.renderEdge(id, element, edge, nodeMoving);
-  }
-
-
-  renderEdges = () => {
-    const { edges, draggingEdge } = this.state;
-    if (!this.entities || draggingEdge) {
-      return;
-    }
-    for (let i = 0; i < edges.length; i++){
-      this.asyncRenderEdge(edges[i]);
-    }
   }
 
   /*

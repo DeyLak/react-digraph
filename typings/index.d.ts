@@ -89,6 +89,12 @@ declare module "react-digraph" {
 
   export const Edge: React.Component<IEdgeProps>;
 
+  export type IViewTransform = {
+    k: number;
+    x: number;
+    y: number;
+  };
+
   export type IGraphViewProps = {
     backgroundFillId?: string;
     edges: any[];
@@ -108,6 +114,8 @@ declare module "react-digraph" {
     nodeSubtypes: any;
     nodeTypes: any;
     readOnly?: boolean;
+    disableMoveNodes?: boolean;
+    nodeDragThreshold?: number;
     selected: any;
     showGraphControls?: boolean;
     zoomDelay?: number;
@@ -126,6 +134,7 @@ declare module "react-digraph" {
     onSwapEdge: (sourceNode: INode, targetNode: INode, edge: IEdge) => void;
     onUndo?: () => void;
     onUpdateNode: (node: INode) => void;
+    onZoom?: (transform: IViewTransform) => void;
     renderBackground?: (gridSize?: number) => any;
     renderDefs?: () => any;
     renderNode?: (

@@ -58,8 +58,8 @@ class Edge extends React.Component<IEdgeProps> {
   };
 
   static getTheta(pt1: any, pt2: any) {
-    const xComp = (pt2.x || 0) - (pt1.x || 0);
-    const yComp = (pt2.y || 0) - (pt1.y || 0);
+    const xComp = (pt2 && pt2.x ? pt2.x : 0) - (pt1 && pt1.x ? pt1.x : 0);
+    const yComp = (pt2 && pt2.y ? pt2.y : 0) - (pt1 && pt1.y ? pt1.y : 0);
     const theta = Math.atan2(yComp, xComp);
     return theta;
   }
@@ -139,10 +139,10 @@ class Edge extends React.Component<IEdgeProps> {
     const heightAttr = defSvgRotatedRectElement.getAttribute('height');
     const w = widthAttr ? parseFloat(widthAttr) : clientRect.width;
     const h = heightAttr ? parseFloat(heightAttr) : clientRect.height;
-    const trgX = trg.x || 0;
-    const trgY = trg.y || 0;
-    const srcX = src.x || 0;
-    const srcY = src.y || 0;
+    const trgX = trg && trg.x ? trg.x : 0;
+    const trgY = trg && trg.y ? trg.y : 0;
+    const srcX = src && src.x ? src.x : 0;
+    const srcY = src && src.y ? src.y : 0;
 
     const top = trgY - h / 2;
     const bottom = trgY + h / 2;
@@ -364,7 +364,7 @@ class Edge extends React.Component<IEdgeProps> {
   ) {
     let response = Edge.getDefaultIntersectResponse();
 
-    if (!trg[nodeKey]) {
+    if (!trg || !trg[nodeKey]) {
       return response;
     }
 
@@ -491,8 +491,8 @@ class Edge extends React.Component<IEdgeProps> {
     const { sourceNode, targetNode, nodeKey, nodeSize, viewWrapperElem } = this.props;
     const trgX = targetNode && targetNode.x ? targetNode.x : 0;
     const trgY = targetNode && targetNode.y ? targetNode.y : 0;
-    const srcX = targetNode && sourceNode.x ? sourceNode.x : 0;
-    const srcY = targetNode && sourceNode.y ? sourceNode.y : 0;
+    const srcX = sourceNode && sourceNode.x ? sourceNode.x : 0;
+    const srcY = sourceNode && sourceNode.y ? sourceNode.y : 0;
 
     // To calculate the offset for a specific node we use that node as the third parameter
     // and the accompanying node as the second parameter, representing where the line

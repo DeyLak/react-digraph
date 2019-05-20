@@ -19,6 +19,12 @@ import { type LayoutEngineType } from '../utilities/layout-engine/layout-engine-
 import { type IEdge, type ITargetPosition } from './edge';
 import { type INode } from './node';
 
+export type IViewTransform = {
+  k: number,
+  x: number,
+  y: number
+};
+
 export type IGraphViewProps = {
   backgroundFillId?: string;
   edges: any[];
@@ -39,6 +45,7 @@ export type IGraphViewProps = {
   nodeTypes: any;
   readOnly?: boolean;
   disableMoveNodes?: boolean;
+  nodeDragThreshold?: number;
   selected: any;
   showGraphControls?: boolean;
   zoomDelay?: number;
@@ -57,6 +64,7 @@ export type IGraphViewProps = {
   onSwapEdge: (sourceNode: INode, targetNode: INode, edge: IEdge) => void;
   onUndo?: () => void;
   onUpdateNode: (node: INode) => void;
+  onZoom?: (transform: IViewTransform) => void;
   renderBackground?: (gridSize?: number) => any;
   renderDefs?: () => any;
   renderNode?: (

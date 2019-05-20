@@ -40,6 +40,8 @@ type INodeProps = {
   opacity?: number;
   nodeKey: string;
   nodeSize?: number;
+  nodeDragThreshold: number;
+  disableMoveNodes: boolean;
   onNodeMouseEnter: (event: any, data: any, hovered: boolean) => void;
   onNodeMouseLeave: (event: any, data: any) => void;
   onNodeMove: (point: IPoint, id: string, shiftKey: boolean) => void;
@@ -60,6 +62,8 @@ type INodeProps = {
 
 type INodeState = {
   hovered: boolean;
+  startX: number;
+  startY: number;
   x: number;
   y: number;
   selected: boolean;
@@ -103,7 +107,9 @@ class Node extends React.Component<INodeProps, INodeState> {
       mouseDown: false,
       selected: false,
       x: props.data.x || 0,
-      y: props.data.y || 0
+      y: props.data.y || 0,
+      startX: 0,
+      startY: 0,
     };
 
     this.nodeRef = React.createRef();
@@ -124,7 +130,15 @@ class Node extends React.Component<INodeProps, INodeState> {
   handleMouseMove = () => {
     const mouseButtonDown = d3.event.sourceEvent.buttons === 1;
     const shiftKey = d3.event.sourceEvent.shiftKey;
-    const { nodeSize, layoutEngine, nodeKey, viewWrapperElem } = this.props;
+    const {
+      nodeSize,
+      layoutEngine,
+      nodeKey,
+      viewWrapperElem,
+      nodeDragThreshold,
+      disableMoveNodes,
+    } = this.props;
+    const { startX, startY, drawingEdge } = this.state
     if (!mouseButtonDown) {
       return;
     }
@@ -132,25 +146,29 @@ class Node extends React.Component<INodeProps, INodeState> {
     // While the mouse is down, this function handles all mouse movement
     const newState = {
       x: d3.event.x,
-      y: d3.event.y
+      y: d3.event.y,
     };
 
-    if (shiftKey) {
-      this.setState({ drawingEdge: true });
-      // draw edge
-      // undo the target offset subtraction done by Edge
-      const off = Edge.calculateOffset(nodeSize, this.props.data, newState, nodeKey, true, viewWrapperElem);
-      newState.x += off.xOff;
-      newState.y += off.yOff;
-      // now tell the graph that we're actually drawing an edge
-    } else if(!this.state.drawingEdge && layoutEngine) {
-      // move node using the layout engine
-      Object.assign(newState, layoutEngine.getPositionForNode(newState));
+    const currentDistance = Math.sqrt((startX - newState.x)**2 + (startY - newState.y)**2)
+
+    if (currentDistance > nodeDragThreshold || drawingEdge) {
+      if (shiftKey || disableMoveNodes) {
+        this.setState({ drawingEdge: true });
+        // draw edge
+        // undo the target offset subtraction done by Edge
+        const off = Edge.calculateOffset(nodeSize, this.props.data, newState, nodeKey, true, viewWrapperElem);
+        newState.x += off.xOff;
+        newState.y += off.yOff;
+        // now tell the graph that we're actually drawing an edge
+      } else if(!this.state.drawingEdge && layoutEngine) {
+        // move node using the layout engine
+        Object.assign(newState, layoutEngine.getPositionForNode(newState));
+      }
+      // Never use this.props.index because if the nodes array changes order
+      // then this function could move the wrong node.
+      this.props.onNodeMove(newState, this.props.data[nodeKey], shiftKey);
     }
     this.setState(newState);
-    // Never use this.props.index because if the nodes array changes order
-    // then this function could move the wrong node.
-    this.props.onNodeMove(newState, this.props.data[nodeKey], shiftKey);
   }
 
   handleDragStart = () => {
@@ -162,6 +180,10 @@ class Node extends React.Component<INodeProps, INodeState> {
     }
     // Moves child to the end of the element stack to re-arrange the z-index
     this.nodeRef.current.parentElement.parentElement.appendChild(this.nodeRef.current.parentElement);
+    this.setState({
+      startX: d3.event.x,
+      startY: d3.event.y,
+    });
   }
 
   handleDragEnd = () => {
