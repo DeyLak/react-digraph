@@ -1,5 +1,4 @@
 .*
-src/
 coverage/
 dist/test/
 dist/examples/
