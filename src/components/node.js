@@ -69,6 +69,7 @@ type INodeState = {
   selected: boolean;
   mouseDown: boolean;
   drawingEdge: boolean;
+  dragOccured: boolean;
 };
 
 export type IPoint = {
@@ -110,6 +111,8 @@ class Node extends React.Component<INodeProps, INodeState> {
       y: props.data.y || 0,
       startX: 0,
       startY: 0,
+      // Used for avoiding of recreating DOM nodes, so users can listen for click events outside of the component
+      dragOccured: false,
     };
 
     this.nodeRef = React.createRef();
@@ -167,19 +170,17 @@ class Node extends React.Component<INodeProps, INodeState> {
       // Never use this.props.index because if the nodes array changes order
       // then this function could move the wrong node.
       this.props.onNodeMove(newState, this.props.data[nodeKey], shiftKey);
+      // Moves child to the end of the element stack to re-arrange the z-index
+      this.nodeRef.current.parentElement.parentElement.appendChild(this.nodeRef.current.parentElement);
+      this.setState({ dragOccured: true });
     }
     this.setState(newState);
   }
 
   handleDragStart = () => {
-    if (!this.nodeRef.current) {
-      return;
-    }
-    if (!this.oldSibling) {
+    if (this.nodeRef.current && !this.oldSibling) {
       this.oldSibling = this.nodeRef.current.parentElement.nextSibling;
     }
-    // Moves child to the end of the element stack to re-arrange the z-index
-    this.nodeRef.current.parentElement.parentElement.appendChild(this.nodeRef.current.parentElement);
     this.setState({
       startX: d3.event.x,
       startY: d3.event.y,
@@ -187,14 +188,16 @@ class Node extends React.Component<INodeProps, INodeState> {
   }
 
   handleDragEnd = () => {
-    if (!this.nodeRef.current) {
-      return;
-    }
     const { x, y, drawingEdge } = this.state;
     const { data, index, nodeKey } = this.props;
-    this.setState({ mouseDown: false, drawingEdge: false });
+    this.setState({
+      mouseDown: false,
+      drawingEdge: false,
+      dragOccured: false,
+      selected: true,
+    });
 
-    if (this.oldSibling && this.oldSibling.parentElement) {
+    if (this.nodeRef.current && this.oldSibling && this.oldSibling.parentElement && this.state.dragOccured) {
       this.oldSibling.parentElement.insertBefore(this.nodeRef.current.parentElement, this.oldSibling);
     }
 
@@ -204,7 +207,6 @@ class Node extends React.Component<INodeProps, INodeState> {
       data[nodeKey],
       shiftKey || drawingEdge
     );
-
     this.props.onNodeSelected(data, data[nodeKey], shiftKey || drawingEdge);
   }
 

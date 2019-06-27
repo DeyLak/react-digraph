@@ -551,7 +551,7 @@ class Edge extends React.Component<IEdgeProps> {
       return null;
     }
     const id = `${data.source || ''}_${data.target}`;
-    const className = GraphUtils.classNames('edge', {
+    const className = GraphUtils.classNames('edge', data.type, {
       selected: this.props.isSelected
     });
 
