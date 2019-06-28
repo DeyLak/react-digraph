@@ -584,7 +584,6 @@ class GraphView extends React.Component<IGraphViewProps, IGraphViewState> {
     if (isClickInsideSVG) {
       return;
     }
-    console.log(event)
     this.setState({
       documentClicked: true,
       focused: false,
