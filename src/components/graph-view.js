@@ -570,13 +570,21 @@ class GraphView extends React.Component<IGraphViewProps, IGraphViewState> {
 
   handleDocumentClick = (event: MouseEvent) => {
     // Ignore document click if it's in the SVGElement
-    if (event &&
-      event.target &&
-      event.target.ownerSVGElement != null &&
-      event.target.ownerSVGElement === this.graphSvg.current
-    ) {
+    let isClickInsideSVG = false
+    if (event && event.target) {
+      // Recurcive check is used for cases, where we have foreignObject rendered as node
+      const checkSvg = (element) => {
+        return (
+          (element.ownerSVGElement != null && element.ownerSVGElement === this.graphSvg.current) ||
+          element.parentElement && checkSvg(element.parentElement)
+        )
+      }
+      isClickInsideSVG = checkSvg(event.target)
+    }
+    if (isClickInsideSVG) {
       return;
     }
+    console.log(event)
     this.setState({
       documentClicked: true,
       focused: false,
