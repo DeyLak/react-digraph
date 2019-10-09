@@ -80,6 +80,7 @@ export type IPoint = {
 class Node extends React.Component<INodeProps, INodeState> {
   static defaultProps = {
     isSelected: false,
+    nodeDragThreshold: 0,
     nodeSize: 154,
     onNodeMouseEnter: () => { return; },
     onNodeMouseLeave: () => { return; },
@@ -153,7 +154,6 @@ class Node extends React.Component<INodeProps, INodeState> {
     };
 
     const currentDistance = Math.sqrt((startX - newState.x)**2 + (startY - newState.y)**2)
-
     if (currentDistance > nodeDragThreshold || drawingEdge) {
       if (shiftKey || disableMoveNodes) {
         this.setState({ drawingEdge: true });
@@ -171,7 +171,13 @@ class Node extends React.Component<INodeProps, INodeState> {
       // then this function could move the wrong node.
       this.props.onNodeMove(newState, this.props.data[nodeKey], shiftKey);
       // Moves child to the end of the element stack to re-arrange the z-index
-      this.nodeRef.current.parentElement.parentElement.appendChild(this.nodeRef.current.parentElement);
+      if (
+        this.nodeRef.current &&
+        this.nodeRef.current.parentElement &&
+        this.nodeRef.current.parentElement.parentElement
+      ) {
+        this.nodeRef.current.parentElement.parentElement.appendChild(this.nodeRef.current.parentElement);
+      }
       this.setState({ dragOccured: true });
     }
     this.setState(newState);
@@ -190,16 +196,17 @@ class Node extends React.Component<INodeProps, INodeState> {
   handleDragEnd = () => {
     const { x, y, drawingEdge } = this.state;
     const { data, index, nodeKey } = this.props;
+
+    if (this.nodeRef.current && this.oldSibling && this.oldSibling.parentElement && this.state.dragOccured) {
+      this.oldSibling.parentElement.insertBefore(this.nodeRef.current.parentElement, this.oldSibling);
+    }
+
     this.setState({
       mouseDown: false,
       drawingEdge: false,
       dragOccured: false,
       selected: true,
     });
-
-    if (this.nodeRef.current && this.oldSibling && this.oldSibling.parentElement && this.state.dragOccured) {
-      this.oldSibling.parentElement.insertBefore(this.nodeRef.current.parentElement, this.oldSibling);
-    }
 
     const shiftKey = d3.event.sourceEvent.shiftKey;
     this.props.onNodeUpdate(

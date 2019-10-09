@@ -1235,6 +1235,18 @@ class GraphView extends React.Component<IGraphViewProps, IGraphViewState> {
     this.renderEdge(id, element, edge, nodeMoving);
   }
 
+  renderEdges = () => {
+    const { edges, draggingEdge } = this.state;
+
+    if (!this.entities || draggingEdge) {
+      return;
+    }
+
+    for (let i = 0; i < edges.length; i++) {
+      this.asyncRenderEdge(edges[i]);
+    }
+  };
+
   /*
    * GraphControls is a special child component. To maximize responsiveness we disable
    * rendering on zoom level changes, but this component still needs to update.

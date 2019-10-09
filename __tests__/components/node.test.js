@@ -348,6 +348,9 @@ describe('Node component', () => {
           insertBefore
         }
       };
+      output.setState({
+        dragOccured: true,
+      });
 
       output.instance().handleDragEnd();
       expect(insertBefore).toHaveBeenCalledWith('blah', output.instance().oldSibling);

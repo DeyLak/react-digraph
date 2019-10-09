@@ -58,7 +58,7 @@ describe('Edge component', () => {
       expect(output.props()['data-target']).toEqual('bar');
 
       const g = output.children().find('g').first();
-      expect(g.props().className).toEqual('edge');
+      expect(g.props().className).toEqual('edge fake');
 
       const path = output.find('path').first();
       expect(path.props().className).toEqual('edge-path');
